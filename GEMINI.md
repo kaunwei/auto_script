@@ -13,13 +13,14 @@ This repository operates on a **Dual-Terminal Architecture** separating interact
 │                 Terminal A: Interactive Architect           │
 │  • Discuss architecture & requirements with user.           │
 │  • Decompose goals into single-line atomic English tasks.   │
-│  • Write tasks to tasks.txt.                                │
+│  • Autonomously manages .worker.env (models, ext dirs).    │
 │  • Inspect progress.log (top <=10 lines) for acceptance.    │
 └──────────────────────────────┬──────────────────────────────┘
                                │ (FIFO Queue)
 ┌──────────────────────────────▼──────────────────────────────┐
 │                 Terminal B: Unattended Background Worker    │
-│  • worker.sh daemon polls tasks.txt continuously.           │
+│  • Pure zero-argument execution (just run ./worker.sh).     │
+│  • Auto-sources .worker.env if configured by Terminal A.    │
 │  • Stateless CLI process (agy --model gemini-3.7-flash-low).│
 │  • Follows .skills/universal-build-verify.md.               │
 │  • Runs builds, unit tests, GUI smoke tests.                │

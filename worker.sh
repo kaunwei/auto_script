@@ -7,8 +7,13 @@
 set -uo pipefail
 
 # ------------------------------------------------------------------------------
-# Configuration (Overrideable via environment variables)
+# Configuration (Auto-sources .worker.env if present, otherwise uses defaults)
 # ------------------------------------------------------------------------------
+if [ -f ".worker.env" ]; then
+  # shellcheck source=/dev/null
+  source ".worker.env"
+fi
+
 TASKS_FILE="${TASKS_FILE:-tasks.txt}"
 TASKS_DONE_FILE="${TASKS_DONE_FILE:-tasks.done}"
 PROGRESS_FILE="${PROGRESS_FILE:-progress.log}"
@@ -22,6 +27,8 @@ AI_MODEL="${AI_MODEL:-gemini-3.7-flash-low}"
 AI_EFFORT="${AI_EFFORT:-low}"
 TASK_TIMEOUT="${TASK_TIMEOUT:-600}"
 POLL_INTERVAL="${POLL_INTERVAL:-5}"
+USE_SANDBOX="${USE_SANDBOX:-0}"
+ADDITIONAL_DIRS="${ADDITIONAL_DIRS:-}"
 
 # Force non-interactive, unpaged batch environment
 export CI=1
@@ -176,10 +183,25 @@ PROMPT_EOF
   EXIT_CODE=0
 
   if [ "$AI_CLI" = "agy" ]; then
+    EXTRA_CLI_ARGS=()
+    if [ "$USE_SANDBOX" = "1" ] || [ "$USE_SANDBOX" = "true" ]; then
+      EXTRA_CLI_ARGS+=("--sandbox")
+    fi
+    if [ -n "$ADDITIONAL_DIRS" ]; then
+      IFS=',' read -ra DIRS <<< "$ADDITIONAL_DIRS"
+      for d in "${DIRS[@]}"; do
+        d_trimmed=$(echo "$d" | xargs)
+        if [ -n "$d_trimmed" ] && [ -d "$d_trimmed" ]; then
+          EXTRA_CLI_ARGS+=("--add-dir" "$d_trimmed")
+        fi
+      done
+    fi
+
     timeout "$TASK_TIMEOUT" agy -p "$PROMPT_PAYLOAD" \
       --dangerously-skip-permissions \
       --model "$AI_MODEL" \
-      --effort "$AI_EFFORT" > "$CMD_OUTPUT_TMP" 2>&1 || EXIT_CODE=$?
+      --effort "$AI_EFFORT" \
+      "${EXTRA_CLI_ARGS[@]}" > "$CMD_OUTPUT_TMP" 2>&1 || EXIT_CODE=$?
   else
     timeout "$TASK_TIMEOUT" "$AI_CLI" "$PROMPT_PAYLOAD" > "$CMD_OUTPUT_TMP" 2>&1 || EXIT_CODE=$?
   fi
