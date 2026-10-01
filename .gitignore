@@ -1,0 +1,18 @@
+# 24h Unattended Worker Runtime Artifacts
+worker.status
+.worker.log
+.worker.pid
+PAUSE
+.scratch/
+
+# Build & Environment Artifacts
+build/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+!progress.log
