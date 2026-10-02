@@ -44,7 +44,7 @@ cleanup() {
   echo ""
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] Shutting down worker daemon..."
   rm -f "$PID_FILE"
-  update_status "STOPPED" "" "0" "0" "0" "0" "0%"
+  update_status "STOPPED" "" "0" "0" "0" "0" "0%" "[------------------------------] 0%"
   exit 0
 }
 
@@ -62,6 +62,23 @@ echo "$$" > "$PID_FILE"
 # ------------------------------------------------------------------------------
 # Helper Functions
 # ------------------------------------------------------------------------------
+render_progress_bar() {
+  local cur="$1"
+  local total="$2"
+  local width="${3:-30}"
+  if [ "$total" -le 0 ]; then
+    echo "[------------------------------] 0% (0/0)"
+    return
+  fi
+  local pct=$(( cur * 100 / total ))
+  local filled=$(( cur * width / total ))
+  local empty=$(( width - filled ))
+  local bar=""
+  for ((i=0; i<filled; i++)); do bar+="#"; done
+  for ((i=0; i<empty; i++)); do bar+="-"; done
+  echo "[$bar] ${pct}% (${cur}/${total})"
+}
+
 update_status() {
   local state="$1"
   local current_task="${2:-}"
@@ -70,8 +87,13 @@ update_status() {
   local total_tasks="${5:-0}"
   local remaining="${6:-0}"
   local percent="${7:-0%}"
+  local bar="${8:-}"
   local now
   now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+  if [ -z "$bar" ]; then
+    bar=$(render_progress_bar "$current_idx" "$total_tasks" 30)
+  fi
 
   cat <<EOF > "$STATUS_FILE"
 {
@@ -82,7 +104,8 @@ update_status() {
     "current_index": $current_idx,
     "total_tasks": $total_tasks,
     "remaining": $remaining,
-    "percentage": "$percent"
+    "percentage": "$percent",
+    "bar": "$bar"
   },
   "pid": $$,
   "model": "$AI_MODEL",
@@ -128,7 +151,10 @@ echo " PID: $$ | CLI: $AI_CLI | Model: $AI_MODEL | Timeout: ${TASK_TIMEOUT}s"
 echo " Tasks File: $TASKS_FILE | Progress: $PROGRESS_FILE"
 echo "=============================================================================="
 
-update_status "IDLE" "" "0"
+update_status "IDLE" "" "0" "0" "0" "0" "0%" "[------------------------------] 0%"
+
+WAS_BUSY=0
+IDLE_HEARTBEAT_COUNT=0
 
 # ------------------------------------------------------------------------------
 # Main Polling Loop
@@ -137,7 +163,7 @@ while true; do
   # Check for physical pause switch
   if [ -f "$PAUSE_FILE" ]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PAUSED] Found $PAUSE_FILE. Sleeping..."
-    update_status "PAUSED" "Paused via $PAUSE_FILE file" "0"
+    update_status "PAUSED" "Paused via $PAUSE_FILE file" "0" "0" "0" "0" "0%" "[PAUSED]"
     sleep "$POLL_INTERVAL"
     continue
   fi
@@ -150,13 +176,36 @@ while true; do
   TOTAL_COUNT=$(( DONE_COUNT + REMAINING_COUNT ))
 
   if [ -z "$RAW_TASK" ]; then
-    update_status "IDLE" "" "0" "$DONE_COUNT" "$TOTAL_COUNT" "0" "100%"
+    BAR=$(render_progress_bar "$DONE_COUNT" "$TOTAL_COUNT" 30)
+    update_status "IDLE" "" "0" "$DONE_COUNT" "$TOTAL_COUNT" "0" "100%" "$BAR"
+
+    if [ $WAS_BUSY -eq 1 ]; then
+      echo ""
+      echo "=============================================================================="
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🎉 [ALL TASKS COMPLETED] $BAR"
+      echo "[IDLE] Queue is empty (Total completed: $DONE_COUNT tasks)."
+      echo "[IDLE] Waiting for new tasks in $TASKS_FILE... (Polling every ${POLL_INTERVAL}s)"
+      echo "=============================================================================="
+      WAS_BUSY=0
+      IDLE_HEARTBEAT_COUNT=0
+    else
+      IDLE_HEARTBEAT_COUNT=$(( IDLE_HEARTBEAT_COUNT + 1 ))
+      # Print a heartbeat line every 60 seconds (12 intervals of 5s)
+      if [ $(( IDLE_HEARTBEAT_COUNT % 12 )) -eq 0 ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [IDLE] Waiting for tasks in $TASKS_FILE... (Done: $DONE_COUNT | Heartbeat OK)"
+      fi
+    fi
+
     sleep "$POLL_INTERVAL"
     continue
   fi
 
+  WAS_BUSY=1
+  IDLE_HEARTBEAT_COUNT=0
+
   CURRENT_IDX=$(( DONE_COUNT + 1 ))
   PERCENT=$(( (CURRENT_IDX * 100) / TOTAL_COUNT ))
+  BAR=$(render_progress_bar "$CURRENT_IDX" "$TOTAL_COUNT" 30)
 
   # Pop the task line atomically from tasks.txt
   TEMP_TASKS=$(mktemp)
@@ -172,11 +221,11 @@ while true; do
   
   echo ""
   echo "=============================================================================="
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] >>> [Task $CURRENT_IDX of $TOTAL_COUNT | Progress: ${PERCENT}% | Remaining: $((REMAINING_COUNT - 1))]"
-  echo ">>> Task: $TASK_TITLE"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] >>> Task $CURRENT_IDX of $TOTAL_COUNT | $BAR"
+  echo ">>> Popped Task: $TASK_TITLE"
   echo "=============================================================================="
 
-  update_status "RUNNING" "$TASK_TITLE" "0" "$CURRENT_IDX" "$TOTAL_COUNT" "$((REMAINING_COUNT - 1))" "${PERCENT}%"
+  update_status "RUNNING" "$TASK_TITLE" "0" "$CURRENT_IDX" "$TOTAL_COUNT" "$((REMAINING_COUNT - 1))" "${PERCENT}%" "$BAR"
 
   # Construct Prompt for the CLI Process
   PROMPT_PAYLOAD=$(cat <<PROMPT_EOF
@@ -252,7 +301,7 @@ BLOCK_EOF
 )
     prepend_progress_log "$BLOCKED_SUMMARY"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [FAILED] $TASK_TITLE [TIMEOUT]" >> "$TASKS_DONE_FILE"
-    update_status "BLOCKED" "$TASK_TITLE (TIMEOUT)" "$DURATION"
+    update_status "BLOCKED" "$TASK_TITLE (TIMEOUT)" "$DURATION" "$CURRENT_IDX" "$TOTAL_COUNT" "$((REMAINING_COUNT - 1))" "${PERCENT}%" "$BAR"
 
   elif [ $EXIT_CODE -ne 0 ]; then
     # Execution failed
@@ -270,13 +319,15 @@ BLOCK_EOF
 )
     prepend_progress_log "$BLOCKED_SUMMARY"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [FAILED] $TASK_TITLE [EXIT_$EXIT_CODE]" >> "$TASKS_DONE_FILE"
-    update_status "BLOCKED" "$TASK_TITLE (ERROR $EXIT_CODE)" "$DURATION"
+    update_status "BLOCKED" "$TASK_TITLE (ERROR $EXIT_CODE)" "$DURATION" "$CURRENT_IDX" "$TOTAL_COUNT" "$((REMAINING_COUNT - 1))" "${PERCENT}%" "$BAR"
 
   else
     # Success
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [SUCCESS] Task completed in ${DURATION}s"
+    NEW_DONE_COUNT=$(( DONE_COUNT + 1 ))
+    FINAL_BAR=$(render_progress_bar "$NEW_DONE_COUNT" "$TOTAL_COUNT" 30)
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [SUCCESS] Task completed in ${DURATION}s | $FINAL_BAR"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DONE] $TASK_TITLE (Duration: ${DURATION}s)" >> "$TASKS_DONE_FILE"
-    update_status "IDLE" "" "0"
+    update_status "IDLE" "" "0" "$NEW_DONE_COUNT" "$TOTAL_COUNT" "$((REMAINING_COUNT - 1))" "$(( (NEW_DONE_COUNT * 100) / TOTAL_COUNT ))%" "$FINAL_BAR"
   fi
 
   rm -f "$CMD_OUTPUT_TMP"
