@@ -25,7 +25,7 @@ PAUSE_FILE="${PAUSE_FILE:-PAUSE}"
 AI_CLI="${AI_CLI:-agy}"
 AI_MODEL="${AI_MODEL:-gemini-3.7-flash-low}"
 AI_EFFORT="${AI_EFFORT:-low}"
-TASK_TIMEOUT="${TASK_TIMEOUT:-600}"
+TASK_TIMEOUT="${TASK_TIMEOUT:-1800}"
 POLL_INTERVAL="${POLL_INTERVAL:-5}"
 USE_SANDBOX="${USE_SANDBOX:-0}"
 ADDITIONAL_DIRS="${ADDITIONAL_DIRS:-}"
@@ -44,7 +44,7 @@ cleanup() {
   echo ""
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] Shutting down worker daemon..."
   rm -f "$PID_FILE"
-  update_status "STOPPED" "" "0"
+  update_status "STOPPED" "" "0" "0" "0" "0" "0%"
   exit 0
 }
 
@@ -66,6 +66,10 @@ update_status() {
   local state="$1"
   local current_task="${2:-}"
   local elapsed="${3:-0}"
+  local current_idx="${4:-0}"
+  local total_tasks="${5:-0}"
+  local remaining="${6:-0}"
+  local percent="${7:-0%}"
   local now
   now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -74,9 +78,16 @@ update_status() {
   "state": "$state",
   "current_task": $(if [ -n "$current_task" ]; then echo "\"$current_task\""; else echo "null"; fi),
   "elapsed_seconds": $elapsed,
+  "progress": {
+    "current_index": $current_idx,
+    "total_tasks": $total_tasks,
+    "remaining": $remaining,
+    "percentage": "$percent"
+  },
   "pid": $$,
   "model": "$AI_MODEL",
   "cli": "$AI_CLI",
+  "timeout_seconds": $TASK_TIMEOUT,
   "last_heartbeat": "$now"
 }
 EOF
@@ -132,16 +143,22 @@ while true; do
   fi
 
   # Peek at the first non-empty, non-comment line in tasks.txt
-  RAW_TASK=$(grep -v '^[[:space:]]*#' "$TASKS_FILE" | grep -v '^[[:space:]]*$' | head -n 1 || true)
+  RAW_TASK=$(grep -v '^[[:space:]]*#' "$TASKS_FILE" 2>/dev/null | grep -v '^[[:space:]]*$' | head -n 1 || true)
+
+  DONE_COUNT=$(grep -v '^[[:space:]]*#' "$TASKS_DONE_FILE" 2>/dev/null | grep -v '^[[:space:]]*$' | wc -l)
+  REMAINING_COUNT=$(grep -v '^[[:space:]]*#' "$TASKS_FILE" 2>/dev/null | grep -v '^[[:space:]]*$' | wc -l)
+  TOTAL_COUNT=$(( DONE_COUNT + REMAINING_COUNT ))
 
   if [ -z "$RAW_TASK" ]; then
-    update_status "IDLE" "" "0"
+    update_status "IDLE" "" "0" "$DONE_COUNT" "$TOTAL_COUNT" "0" "100%"
     sleep "$POLL_INTERVAL"
     continue
   fi
 
+  CURRENT_IDX=$(( DONE_COUNT + 1 ))
+  PERCENT=$(( (CURRENT_IDX * 100) / TOTAL_COUNT ))
+
   # Pop the task line atomically from tasks.txt
-  # Remove the matched line from TASKS_FILE
   TEMP_TASKS=$(mktemp)
   awk -v task="$RAW_TASK" '
     !found && $0 == task { found=1; next }
@@ -154,11 +171,12 @@ while true; do
   START_TIME=$(date +%s)
   
   echo ""
-  echo "------------------------------------------------------------------------------"
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] >>> Popped Task: $TASK_TITLE"
-  echo "------------------------------------------------------------------------------"
+  echo "=============================================================================="
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] >>> [Task $CURRENT_IDX of $TOTAL_COUNT | Progress: ${PERCENT}% | Remaining: $((REMAINING_COUNT - 1))]"
+  echo ">>> Task: $TASK_TITLE"
+  echo "=============================================================================="
 
-  update_status "RUNNING" "$TASK_TITLE" "0"
+  update_status "RUNNING" "$TASK_TITLE" "0" "$CURRENT_IDX" "$TOTAL_COUNT" "$((REMAINING_COUNT - 1))" "${PERCENT}%"
 
   # Construct Prompt for the CLI Process
   PROMPT_PAYLOAD=$(cat <<PROMPT_EOF
