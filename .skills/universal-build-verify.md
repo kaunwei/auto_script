@@ -1,6 +1,6 @@
 ---
 name: universal-build-verify
-description: "Universal build, test, GUI smoke verification, and auto-commit SOP for unattended background workers."
+description: "Universal build, test, GUI smoke verification, honest retry tracking, and auto-commit SOP for unattended background workers."
 ---
 
 # Universal Build, Test & Verification SOP (Background Worker)
@@ -9,77 +9,78 @@ This document is the **mandatory standard operating procedure** that the unatten
 
 ---
 
-## 1. Strict Security Constraints (安全約束)
+## 1. Strict Security & Anti-Rot Constraints (安全與防腐門禁)
 
 1. **NO Global System Modifications**:
    - Under NO circumstances run `sudo`, `apt`, `apt-get`, `yum`, `dnf`, `pacman`, or any host system-level package manager.
 2. **Local Environment Only**:
-   - Dependencies must be managed locally within the project.
-   - For Python: use local virtual environments (`.venv` or `venv`).
-   - For C/C++: use local build paths, `FetchContent`, `vcpkg` (local), or `pkg-config` checks.
-3. **Missing System Dependencies**:
-   - If a required system library or compiler tool is absent on the host, **DO NOT attempt to install it via sudo**.
-   - Mark the task as `[BLOCKED: Missing dependency <name>]`, output the remediation command for the human in `progress.log`, and terminate immediately.
+   - Dependencies must be managed locally within the project (`.venv`, `cmake` local prefix, `pkg-config`).
+3. **Zero Compiler / Lint Warnings (零警告門禁)**:
+   - Code must build cleanly with zero compiler warnings (e.g. `-Wall -Wextra`) and pass static checks without errors.
+4. **Interface Immutability**:
+   - When a task specifies `CONSTRAINTS: Do not change public API`, do not alter public method signatures.
 
 ---
 
 ## 2. Implementation, Build & Verification Workflow
 
-### Step 2.0: Real-Time Execution Logging (即時執行日誌)
-- Before invoking any command or tool (file edit, compilation, unit test, git commit), the Worker MUST print an explicit line:
-  - `[EXEC] Editing <filename>...`
+### Step 2.0: Consult Notes & Real-Time Step Logging
+- Check `.worker.notes.md` for project-specific quirks.
+- Before invoking any command or modifying files, print an explicit line:
+  - `[EXEC] Modifying <filename>...`
   - `[EXEC] Running build command: <command>`
   - `[EXEC] Running test command: <command>`
   - `[EXEC] Running git commit...`
-  This ensures the operator can monitor progress live in the terminal.
 
-### Step 2.1: Code Implementation
-- Open only the specified `TARGET` files.
-- Implement the requested feature, bug fix, or refactor cleanly according to the `ACTION` specification.
-- Follow Test-Driven Development (TDD) where applicable. Write unit tests for new logic.
+### Step 2.1: Code Implementation & Honest Granularity Check
+- **Granularity Rejection (過載拒絕)**: If a Level 1 task turns out to span across > 3 unrelated subsystems or > 300 lines of complex changes, DO NOT guess or struggle. Stop immediately, write `[NEED_DECOMPOSITION]` with a proposed subtask list, and exit cleanly.
+- Implement the requested feature cleanly, following TDD.
 
 ### Step 2.2: Compilation & Syntax Verification
-- **C / C++ Projects**:
-  - Prefer Ninja: `cmake -B build -S . -G Ninja && cmake --build build --parallel`
-  - Fallback to Make: `cmake -B build -S . && cmake --build build -j$(nproc)`
-- **Python Projects**:
-  - Activate venv if present: `source .venv/bin/activate`
-  - Syntax check: `python3 -m py_compile $(git ls-files '*.py')`
-  - Optional static check (if configured): `mypy` or `flake8` / `ruff`
+- **C / C++ Projects**: `cmake --build build -j$(nproc)` / `ninja -C build`
+- **Python Projects**: `source .venv/bin/activate` -> syntax check `python3 -m py_compile` -> `pytest`
 
 ### Step 2.3: Automated Test Execution
-- **C / C++**: Run `ctest --test-dir build --output-on-failure` or execute test binaries directly.
-- **Python**: Run `pytest -v` or `python3 -m unittest discover tests`.
-- **All tests must pass (100% green).**
+- Run targeted tests for the modified component (e.g. `ctest -R <test_name>` or `pytest tests/test_<module>.py`).
+- All tests must pass (100% green).
 
 ### Step 2.4: Desktop GUI & Window Smoke Testing
-For projects containing desktop GUI windows (e.g. Qt, GTK, Tkinter, Pygame, SDL, ImGui, X11/Wayland apps):
-1. **Prevent Process Hanging**: Never launch a GUI event loop without a timeout or headless wrapper in unattended mode.
-2. **Headless Execution**:
-   - If `xvfb-run` is available: `xvfb-run -a <executable>`
-   - If `xvfb-run` is not installed or testing native binary: wrap with timeout:
-     ```bash
-     timeout 2s <executable_path> || [ $? -eq 124 ]
-     ```
-   - An exit code of `124` (SIGTERM by timeout) after clean startup without crash/exceptions is treated as a **PASS** for the GUI smoke test.
+- Use `xvfb-run -a <executable>` or `timeout 2s <executable_path> || [ $? -eq 124 ]`.
 
 ---
 
-## 3. Error Retry Limit (修復上限原則)
+## 3. Error Retry Limit & Intermediate Clean Reset (修復上限與中間重置)
 
-When compilation, linking, tests, or smoke tests fail:
+When build, compilation, or tests fail:
 1. **Maximum 3 Fix Attempts**:
-   - Attempt 1: Read the exact error trace, hypothesize the root cause, apply a surgical fix, rebuild and retest.
-   - Attempt 2: If secondary errors occur, re-evaluate and refine fix.
-   - Attempt 3: Final attempt to resolve any remaining issues.
-2. **Immediate Stop on Exceeded Limit**:
-   - If the task cannot pass after the 3rd attempt, **IMMEDIATELY STOP**.
-   - Do NOT enter an infinite loop.
-   - Mark the task as `[BLOCKED]` in `progress.log` with the exact failure reason and exit with error status.
+   - **Attempt 1**: Analyze error trace, apply surgical fix, rebuild and retest.
+   - **Attempt 2**: If Attempt 1 made things worse, run `git restore <file>` to reset back to baseline before trying an alternative fix.
+   - **Attempt 3**: Final attempt.
+2. **Immediate Stop on 3rd Failure**:
+   - If unable to pass after 3 attempts, STOP immediately. Do NOT enter an infinite loop.
+   - Mark the task as `[BLOCKED]` in `progress.log` and exit.
 
 ---
 
-## 4. Completion Standard & Evidence Logging (結案標準)
+## 4. Honest Escalation Protocol (誠實求助協議)
+
+If at any point:
+- You discover requirement ambiguity, contradictory interfaces, or missing decisions:
+- **DO NOT GUESS OR INVENT FAKE DATA.**
+- Emit a `[NEED_GUIDANCE]` report at the top of `progress.log`:
+```text
+================================================================================
+[NEED_GUIDANCE] TASK-XXX: <Task Title>
+Status: BLOCKED_FOR_GUIDANCE
+Issue: <Detailed explanation of the ambiguity or conflicting spec>
+Question for Manager: <Direct, clear multiple-choice question for human/architect>
+================================================================================
+```
+Then exit cleanly with exit code `2`.
+
+---
+
+## 5. Completion Standard & Evidence Logging (結案標準)
 
 Upon 100% verification success:
 1. **Auto Git Commit**:
@@ -87,25 +88,20 @@ Upon 100% verification success:
    git add <modified-target-files>
    git commit -m "feat/fix: <task title> [TASK-ID]"
    ```
-2. **Prepend Structured Summary to `progress.log`**:
-   Write a concise summary (strictly **≤ 10 lines**) at the **VERY TOP** of `progress.log`:
-
+2. **Prepend Structured Summary & Attempt Trace to `progress.log`**:
 ```text
 ================================================================================
-[SUCCESS] TASK_ID: <Task Title>
-Time: <YYYY-MM-DD HH:MM:SS> | Commit: <Short Hash> | Duration: <Xs>
-Changes: <List of modified files and functions>
+[SUCCESS] TASK-XXX: <Task Title>
+Time: <YYYY-MM-DD HH:MM:SS> | Duration: <Xs> | Attempts: <N>/3 | Confidence: <HIGH|MEDIUM|LOW>
+Task Granularity: <Level 1|Level 2|Level 3>
+Changes: <List of modified files>
 Verification: Build PASS, Tests PASS (<N> passed), GUI Smoke PASS
-Notes: <Brief note or N/A>
-================================================================================
-```
 
-If blocked, prepend the `[BLOCKED]` report:
-```text
-================================================================================
-[BLOCKED] TASK_ID: <Task Title>
-Time: <YYYY-MM-DD HH:MM:SS> | Status: BLOCKED after 3 attempts
-Failure Reason: <Exact error summary>
-Action Needed for Human: <Clear instructions for the human operator>
+Attempt Trace:
+  • Attempt 1: <PASS or failure reason>
+  • Attempt 2: <Fix applied, if any>
+
+Granularity Feedback: 
+  <Worker observation on whether this module was comfortable at current granularity>
 ================================================================================
 ```

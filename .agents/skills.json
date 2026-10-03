@@ -11,6 +11,12 @@
     },
     {
       "path": ".agents/skills/in-progress"
+    },
+    {
+      "path": ".agents/skills/architect"
+    },
+    {
+      "path": ".agents/skills/worker"
     }
   ]
 }

@@ -44,23 +44,41 @@ To optimize token efficiency (50-70% savings) and ensure maximum instruction-fol
 
 ---
 
-## 3. Atomic Task Format Guide (for Terminal A AI)
+## 3. Dynamic Granularity Ladder (動態任務顆粒度)
 
-When Terminal A decomposes user requests into `tasks.txt`, each task MUST occupy exactly one line and adhere to this structured contract:
+Terminal A dynamically sizes tasks into `tasks.txt` based on `docs/agents/granularity-profile.json`:
 
+| Level | Granularity | Scope & Action |
+| :---: | :--- | :--- |
+| **Level 1** | **Coarse (Seam / Feature)** | Specify public interface & verification test. Worker autonomously creates internal helpers & implementation. |
+| **Level 2** | **Medium (Component Slice)** | Break down into discrete module units (e.g. data model vs processor). |
+| **Level 3** | **Micro (Step / Function)** | Precise function-level instructions. Used only when worker requested guidance or previous attempt struggled. |
+
+### Task Format:
 ```text
-TASK-XXX | TARGET: <file_paths> | ACTION: <precise implementation details> | VERIFY: <test command> | CONSTRAINTS: <scope limits>
-```
-
-### Examples:
-```text
-TASK-001 | TARGET: src/auth.py, tests/test_auth.py | ACTION: Implement hash_password(password: str) -> str using SHA-256 with salt | VERIFY: pytest tests/test_auth.py -k test_hash | CONSTRAINTS: Use standard library hashlib only
-TASK-002 | TARGET: src/window.cpp, tests/test_window.cpp | ACTION: Initialize OpenGL window with 60fps timer | VERIFY: cmake --build build && timeout 2s ./build/test_window | CONSTRAINTS: Maintain C++17 compatibility, headless safe
+TASK-XXX | LEVEL: 1 | TARGET: <file_paths> | ACTION: <precise logic details> | VERIFY: <test command> | CONSTRAINTS: <scope limits>
 ```
 
 ---
 
-## 4. Verification & Safe Git Log Rules (Zero Context Pollution)
+## 4. Honest Worker Treaty & Escalation (誠實工人公約)
+
+1. **Zero Guessing (嚴禁瞎猜)**: If requirements or interfaces are ambiguous, Worker emits `[NEED_GUIDANCE]` and pauses.
+2. **Granularity Overflow Rejection (過載拒絕)**: If a Level 1 task spans >3 subsystems or >300 lines, Worker emits `[NEED_DECOMPOSITION]` with proposed subtasks.
+3. **Attempt Trace Transparency**: Worker logs Attempt 1/2/3 traces and confidence score in `progress.log`.
+4. **Intermediate Clean Reset**: Worker cleans bad attempts with `git restore` before trying alternative fix.
+
+---
+
+## 5. Dual-Skill Ecosystem
+
+- **Global**: Matt Pocock foundations (`/tdd`, `/codebase-design`, `/domain-modeling`, `/diagnosing-bugs`, `/git-guardrails`).
+- **Architect Skills** (`.agents/skills/architect/`): `/calibrate-task-granularity`, `/score-worker-performance`, `/handle-worker-guidance`.
+- **Worker Skills** (`.agents/skills/worker/`): `/universal-build-verify`, `/record-attempt-trace`, `/manage-worker-notes`.
+
+---
+
+## 6. Verification & Safe Git Log Rules (Zero Context Pollution)
 
 To keep Terminal A's context window clean and avoid context exhaustion:
 1. **Primary Acceptance**: Terminal A only reads the top 10 lines of `progress.log` (`head -n 15 progress.log`).
