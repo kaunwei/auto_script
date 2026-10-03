@@ -1,3 +1,7 @@
 # ==============================================================================
 # Progress Log (Newest Entries Prepended at the Top)
 # ==============================================================================
+- [PASS] TASK-001 | LEVEL: 1 | TARGET: src/calc.py, tests/test_calc.py | ATTEMPTS: 1 | CONFIDENCE: 1.0
+  Summary: Implemented Calculator class and comprehensive unittest suite.
+  Verification: python3 -m unittest tests/test_calc.py -> 4 tests OK.
+
