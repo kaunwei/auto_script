@@ -63,10 +63,13 @@ TASK-XXX | LEVEL: 1 | TARGET: <file_paths> | ACTION: <precise logic details> | V
 
 ## 4. Honest Worker Treaty & Escalation (誠實工人公約)
 
-1. **Zero Guessing (嚴禁瞎猜)**: If requirements or interfaces are ambiguous, Worker emits `[NEED_GUIDANCE]` and pauses.
-2. **Granularity Overflow Rejection (過載拒絕)**: If a Level 1 task spans >3 subsystems or >300 lines, Worker emits `[NEED_DECOMPOSITION]` with proposed subtasks.
-3. **Attempt Trace Transparency**: Worker logs Attempt 1/2/3 traces and confidence score in `progress.log`.
-4. **Intermediate Clean Reset**: Worker cleans bad attempts with `git restore` before trying alternative fix.
+1. **Single-Seam Freedom (接縫自由實作)**: As long as a task operates on a single architectural module/seam, there is **NO line-of-code limit**. Worker has full autonomy on internal helpers, data structures, and tests.
+2. **Cross-Subsystem Rejection (跨子系統過載拒絕)**: If a task demands simultaneous, uncoordinated changes across multiple decoupled subsystems (which belongs to Planner's domain), Worker emits `[NEED_DECOMPOSITION]` with proposed subtasks.
+3. **3-Tier Escalation & Best-Effort with Note**:
+   - *Tier 1 (Local choices)*: Worker decides autonomously.
+   - *Tier 2 (Recoverable errors)*: Worker self-heals within 3 retries (with `git restore` clean intermediate resets).
+   - *Tier 3 (Fatal blockers)*: Worker emits `[NEED_GUIDANCE]` or `[BLOCKED]` and pauses.
+   - *Minor ambiguities*: Advance with Best-Effort and leave a non-blocking `Notes:` entry in `progress.log` so 24h workflow is not unnecessarily interrupted.
 
 ---
 

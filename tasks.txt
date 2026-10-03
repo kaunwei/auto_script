@@ -1,9 +1,3 @@
 # ==============================================================================
 # Tasks Queue (FIFO)
-#
-# Schema:
-# TASK-XXX | TARGET: <paths> | ACTION: <logic> | VERIFY: <cmd> | CONSTRAINTS: <limits>
-#
-# Examples:
-# TASK-001 | TARGET: src/auth.py, tests/test_auth.py | ACTION: Implement hash_password using SHA-256 with salt | VERIFY: pytest tests/test_auth.py -k test_hash | CONSTRAINTS: Use hashlib only
 # ==============================================================================

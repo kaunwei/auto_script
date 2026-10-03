@@ -32,8 +32,10 @@ This document is the **mandatory standard operating procedure** that the unatten
   - `[EXEC] Running test command: <command>`
   - `[EXEC] Running git commit...`
 
-### Step 2.1: Code Implementation & Honest Granularity Check
-- **Granularity Rejection (過載拒絕)**: If a Level 1 task turns out to span across > 3 unrelated subsystems or > 300 lines of complex changes, DO NOT guess or struggle. Stop immediately, write `[NEED_DECOMPOSITION]` with a proposed subtask list, and exit cleanly.
+### Step 2.1: Code Implementation & Single-Seam Autonomy
+- **Single-Seam Freedom (接縫自由實作)**: As long as the task operates within a single architectural module or cohesive seam, there is **NO line-of-code limit**. Worker is fully authorized to write hundreds of lines of implementation, helper structs, and tests.
+- **Cross-Subsystem Rejection (跨子系統過載拒絕)**: If a task requires simultaneous, uncoordinated modifications across multiple independent subsystems (which should be orchestrated by the Planner), emit `[NEED_DECOMPOSITION]` with proposed subtasks and exit cleanly.
+- **Local Autonomy (局部決策權)**: Worker has full authority on internal algorithms, private helper naming, and data structures. Do not halt for minor internal choices.
 - Implement the requested feature cleanly, following TDD.
 
 ### Step 2.2: Compilation & Syntax Verification
@@ -62,21 +64,19 @@ When build, compilation, or tests fail:
 
 ---
 
-## 4. Honest Escalation Protocol (誠實求助協議)
+## 4. Honest Escalation Protocol (誠實求助與務實推進協議)
 
-If at any point:
-- You discover requirement ambiguity, contradictory interfaces, or missing decisions:
-- **DO NOT GUESS OR INVENT FAKE DATA.**
-- Emit a `[NEED_GUIDANCE]` report at the top of `progress.log`:
-```text
-================================================================================
-[NEED_GUIDANCE] TASK-XXX: <Task Title>
-Status: BLOCKED_FOR_GUIDANCE
-Issue: <Detailed explanation of the ambiguity or conflicting spec>
-Question for Manager: <Direct, clear multiple-choice question for human/architect>
-================================================================================
-```
-Then exit cleanly with exit code `2`.
+### 3-Tier Escalation:
+- **Tier 1 (Local Choices)**: Private helpers, internal data structures ➔ Worker decides autonomously.
+- **Tier 2 (Recoverable Errors)**: Compiler/test errors ➔ Self-heal within 3 attempts.
+- **Tier 3 (Fatal Blockers)**: Direct spec contradiction, missing sudo dependencies, or 3 failed retries ➔ Emit `[NEED_GUIDANCE]` or `[BLOCKED]` and exit cleanly.
+
+### Best-Effort with Note (非阻塞標記推進):
+For minor ambiguities (e.g. default return values or standard error types):
+- Make a standard, idiomatic engineering decision.
+- Finish the task, pass tests, and commit normally.
+- Append a note in `progress.log`: `Notes: [Brief explanation of the choice made, allowing Architect to refine in future task if desired]`.
+- DO NOT halt the unattended pipeline for non-critical ambiguities.
 
 ---
 
