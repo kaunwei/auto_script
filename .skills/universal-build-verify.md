@@ -25,6 +25,14 @@ This document is the **mandatory standard operating procedure** that the unatten
 
 ## 2. Implementation, Build & Verification Workflow
 
+### Step 2.0: Real-Time Execution Logging (即時執行日誌)
+- Before invoking any command or tool (file edit, compilation, unit test, git commit), the Worker MUST print an explicit line:
+  - `[EXEC] Editing <filename>...`
+  - `[EXEC] Running build command: <command>`
+  - `[EXEC] Running test command: <command>`
+  - `[EXEC] Running git commit...`
+  This ensures the operator can monitor progress live in the terminal.
+
 ### Step 2.1: Code Implementation
 - Open only the specified `TARGET` files.
 - Implement the requested feature, bug fix, or refactor cleanly according to the `ACTION` specification.
