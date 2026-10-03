@@ -61,11 +61,19 @@ TASK-XXX | LEVEL: 1 | TARGET: <file_paths> | ACTION: <precise logic details> | V
 
 ---
 
-## 4. Honest Worker Treaty & Escalation (誠實工人公約)
+## 4. Multi-Archetype Tasks & Honest Treaty (多型態任務與誠實工人公約)
 
-1. **Single-Seam Freedom (接縫自由實作)**: As long as a task operates on a single architectural module/seam, there is **NO line-of-code limit**. Worker has full autonomy on internal helpers, data structures, and tests.
-2. **Cross-Subsystem Rejection (跨子系統過載拒絕)**: If a task demands simultaneous, uncoordinated changes across multiple decoupled subsystems (which belongs to Planner's domain), Worker emits `[NEED_DECOMPOSITION]` with proposed subtasks.
-3. **3-Tier Escalation & Best-Effort with Note**:
+1. **Multi-Archetype Scope**: Worker is NOT limited to coding. Tasks encompass:
+   - `[CODE / REFACTOR]`: Implementation, refactoring, and test suites.
+   - `[RESEARCH / SURVEY]`: Evidence-based documentation, API exploration, and environment inspection.
+   - `[BENCHMARK / CASE_STUDY]`: Test matrix execution, performance profiling, and result aggregation.
+   - `[DIAGNOSTIC]`: Root cause isolation, log extraction, and minimal reproduction.
+2. **Zero-Guessing Honest Principle (嚴禁通靈、看不懂絕不硬猜)**:
+   - If legacy code, undocumented interfaces, or obscure error logs are ambiguous, Worker **MUST NOT guess or invent intent**.
+   - Output must clearly distinguish **Verified Facts** (exact code paths, verbatim command outputs) from **Hypotheses**.
+3. **Single-Seam Freedom (接縫自由實作)**: As long as a task operates on a single architectural module/seam, there is **NO line-of-code limit**. Worker has full autonomy on internal helpers, data structures, and tests.
+4. **Cross-Subsystem Rejection (跨子系統過載拒絕)**: If a task demands simultaneous, uncoordinated changes across multiple decoupled subsystems (which belongs to Planner's domain), Worker emits `[NEED_DECOMPOSITION]` with proposed subtasks.
+5. **3-Tier Escalation & Best-Effort with Note**:
    - *Tier 1 (Local choices)*: Worker decides autonomously.
    - *Tier 2 (Recoverable errors)*: Worker self-heals within 3 retries (with `git restore` clean intermediate resets).
    - *Tier 3 (Fatal blockers)*: Worker emits `[NEED_GUIDANCE]` or `[BLOCKED]` and pauses.
@@ -81,15 +89,21 @@ TASK-XXX | LEVEL: 1 | TARGET: <file_paths> | ACTION: <precise logic details> | V
 
 ---
 
-## 6. Verification & Safe Git Log Rules (Zero Context Pollution)
+## 6. Verification & Safe Inspection Protocol (Zero Context Pollution)
 
-To keep Terminal A's context window clean and avoid context exhaustion:
-1. **Primary Acceptance**: Terminal A only reads the top 10 lines of `progress.log` (`head -n 15 progress.log`).
-2. **Safe Git Log Whitelist (If deeper check is needed)**:
-   - `git log -n 1 --stat`
-   - `git show --stat <commit-hash>`
-   - `git log --oneline -n 5`
-3. **STRICTLY FORBIDDEN in Terminal A**:
+To maximize token efficiency and prevent context exhaustion across the 24h cycle:
+1. **Ultra-Concise Inter-AI Protocol (AI 間極簡資訊交換規範)**:
+   - Worker log entries in `progress.log` are strictly capped at **<= 15 lines**.
+   - Dedicated reports (`docs/reports/*.md`) MUST feature an **Executive Summary <= 30 lines** with bulleted facts, metrics, and line pointers. No discursive prose.
+2. **Primary Acceptance**:
+   - Terminal A (Planner) reads only the top block of `progress.log` (`head -n 15 progress.log`) for rapid, low-token acceptance.
+3. **Planner On-Demand Inspection Right (Planner 按需深度抽查特權)**:
+   - If the concise summary is insufficient, ambiguous, or suspicious, Terminal A retains full sovereign right to perform surgical, targeted inspections:
+     - `git log -n 1 --stat`
+     - `git show --stat <commit-hash>`
+     - `git log --oneline -n 5`
+     - Reading targeted file ranges (e.g. `head -n 30 path/to/file` or specific line slices).
+4. **STRICTLY FORBIDDEN in Terminal A**:
    - ❌ Bare `git log` (dumps unbounded commit history).
    - ❌ `git log -p` / bare `git show <hash>` (dumps hundreds of lines of code diffs).
    - ❌ `git diff main...HEAD` (full diff).
