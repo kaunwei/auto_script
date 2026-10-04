@@ -35,10 +35,11 @@ This repository operates on a **Physical Dual-Terminal Architecture** separating
 1. **Track 1: In-Session Immediate Offloading (即時探勘卸載)**:
    - When Planner needs to explore hundreds of lines of code, analyze configs, or gather facts *during the ongoing conversation*, Planner invokes an in-session **Subagent** (`invoke_subagent`).
    - The subagent digests the heavy content and returns a concise summary. The system automatically wakes Planner up upon completion (no `sleep` or polling needed).
-2. **Track 2: Cross-Terminal Batch Offloading (跨終端批次無人值守)**:
+2. **Track 2: Cross-Terminal Batch Offloading & Sentinel Subagent Wakeup (跨終端批次與哨兵喚醒)**:
    - When a plan or batch of features is ready, Planner queues tasks into `tasks.txt`.
-   - Because Worker is mounted in a separate Terminal B, Planner MUST NOT wait with `sleep` loops. Planner immediately finishes its turn and informs the user.
-   - Acceptance is strictly **On-Demand / Event-Driven** (inspected when Human inquires or initiates the next turn).
+   - **Sentinel Subagent Wakeup**: If proactive completion notification is desired without freezing Terminal A, Planner launches a lightweight **Queue Sentinel Subagent** (`invoke_subagent` with `bash scripts/watch_worker.sh 3600`).
+   - Planner immediately yields control to Human. Terminal A remains 100% interactive.
+   - When Terminal B finishes all tasks, the Sentinel Subagent detects completion via zero-token script exit and triggers a **system wakeup event**, allowing Planner to deliver the final acceptance report automatically.
 
 ---
 
@@ -95,7 +96,7 @@ TASK-XXX | LEVEL: 1 | TARGET: <file_paths> | ACTION: <precise logic details> | V
 ## 5. Dual-Skill Ecosystem
 
 - **Global**: Matt Pocock foundations (`/tdd`, `/codebase-design`, `/domain-modeling`, `/diagnosing-bugs`, `/git-guardrails`).
-- **Architect Skills** (`.agents/skills/architect/`): `/calibrate-task-granularity`, `/score-worker-performance`, `/handle-worker-guidance`.
+- **Architect Skills** (`.agents/skills/architect/`): `/calibrate-task-granularity`, `/score-worker-performance`, `/handle-worker-guidance`, `/watch-worker-queue`.
 - **Worker Skills** (`.agents/skills/worker/`): `/universal-build-verify`, `/record-attempt-trace`, `/manage-worker-notes`.
 
 ---
