@@ -4,30 +4,41 @@ This document defines the mandatory rules, operational guardrails, and conventio
 
 ---
 
-## 1. 24h Unattended Dual-Terminal Workflow
+## 1. 24h Unattended Dual-Terminal Workflow & Dual-Track Offloading
 
-This repository operates on a **Dual-Terminal Architecture** separating interactive architectural planning from background unattended execution:
+This repository operates on a **Physical Dual-Terminal Architecture** separating interactive architectural planning from background unattended execution:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                 Terminal A: Interactive Architect           │
-│  • Discuss architecture & requirements with user.           │
-│  • Decompose goals into single-line atomic English tasks.   │
-│  • Autonomously manages .worker.env (models, ext dirs).    │
-│  • Inspect progress.log (top <=10 lines) for acceptance.    │
-└──────────────────────────────┬──────────────────────────────┘
-                               │ (FIFO Queue)
-┌──────────────────────────────▼──────────────────────────────┐
-│                 Terminal B: Unattended Background Worker    │
-│  • Pure zero-argument execution (just run ./worker.sh).     │
-│  • Auto-sources .worker.env if configured by Terminal A.    │
-│  • Stateless CLI process (agy --model gemini-3.7-flash-low).│
-│  • Follows .skills/universal-build-verify.md.               │
-│  • Runs builds, unit tests, GUI smoke tests.                │
-│  • Max 3 repair attempts -> auto rollback on block.         │
-│  • Auto Git Commit & prepends <=10 lines to progress.log.   │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│               Terminal A: Interactive Architect (In-Session)           │
+│  • Discuss architecture & requirements with user.                      │
+│  • [Track 1 Offload] Immediate dirty work / exploratory fact-finding   │
+│    is delegated to In-Session Subagents (auto-notified on completion). │
+│  • Decompose batch goals into single-line atomic English tasks.        │
+│  • Writes tasks to tasks.txt and IMMEDIATELY yields control.           │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ (tasks.txt FIFO Queue)
+┌───────────────────────────────────▼────────────────────────────────────┐
+│          Terminal B: Background Worker Terminal (Mounted Daemon)       │
+│  • User mounts and runs ./worker.sh in a separate terminal / tmux.     │
+│  • [Track 2 Offload] Unattended 24h batch execution & test suites.     │
+│  • Pure zero-argument execution (auto-sources .worker.env).            │
+│  • Stateless CLI process (agy --model gemini-3.7-flash-low).           │
+│  • Follows .skills/universal-build-verify.md.                          │
+│  • Runs builds, unit tests, GUI smoke tests.                           │
+│  • Max 3 repair attempts -> auto rollback on block.                    │
+│  • Auto Git Commit & prepends <=15 lines to progress.log.              │
+└────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Dual-Track Offloading Protocol (雙軌卸載協定):
+1. **Track 1: In-Session Immediate Offloading (即時探勘卸載)**:
+   - When Planner needs to explore hundreds of lines of code, analyze configs, or gather facts *during the ongoing conversation*, Planner invokes an in-session **Subagent** (`invoke_subagent`).
+   - The subagent digests the heavy content and returns a concise summary. The system automatically wakes Planner up upon completion (no `sleep` or polling needed).
+2. **Track 2: Cross-Terminal Batch Offloading (跨終端批次無人值守)**:
+   - When a plan or batch of features is ready, Planner queues tasks into `tasks.txt`.
+   - Because Worker is mounted in a separate Terminal B, Planner MUST NOT wait with `sleep` loops. Planner immediately finishes its turn and informs the user.
+   - Acceptance is strictly **On-Demand / Event-Driven** (inspected when Human inquires or initiates the next turn).
 
 ---
 
@@ -103,7 +114,8 @@ To maximize token efficiency and prevent context exhaustion across the 24h cycle
      - `git show --stat <commit-hash>`
      - `git log --oneline -n 5`
      - Reading targeted file ranges (e.g. `head -n 30 path/to/file` or specific line slices).
-4. **STRICTLY FORBIDDEN in Terminal A**:
+4. **STRICTLY FORBIDDEN in Terminal A (Planner Guardrails)**:
+   - ❌ **Busy-Loop Polling / Sleep Loops**: NEVER run `sleep` or repeatedly poll `progress.log` / `worker.status` in a tool loop waiting for Worker to finish. Once `tasks.txt` is written, Planner MUST immediately yield control and stop calling tools! Inspection is strictly event-driven (when Human asks or during next turn).
    - ❌ Bare `git log` (dumps unbounded commit history).
    - ❌ `git log -p` / bare `git show <hash>` (dumps hundreds of lines of code diffs).
    - ❌ `git diff main...HEAD` (full diff).
